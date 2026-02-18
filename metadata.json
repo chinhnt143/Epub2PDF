@@ -1,0 +1,5 @@
+{
+  "name": "AI-Enhanced EPUB to PDF",
+  "description": "A client-side EPUB to PDF converter that allows reading, formatting, and printing EPUB files. Features Gemini AI to generate executive summaries and study guides for your documents.",
+  "requestFramePermissions": []
+}

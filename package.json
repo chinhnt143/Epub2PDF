@@ -1,0 +1,33 @@
+{
+  "name": "ai-enhanced-epub-to-pdf",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "@google/genai": "^1.41.0",
+    "react-dom": "^19.2.4",
+    "jszip": "^3.10.1",
+    "uuid": "^13.0.0",
+    "path": "^0.12.7",
+    "pdf-lib": "^1.17.1",
+    "cheerio": "^1.2.0",
+    "puppeteer": "^24.37.3",
+    "buffer": "^6.0.3",
+    "epub2": "^3.0.2",
+    "fs-extra": "^11.3.3",
+    "next": "^16.1.6",
+    "os": "^0.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
