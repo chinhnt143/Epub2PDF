@@ -4,169 +4,149 @@ import React, { useState, useCallback } from 'react';
 
 export default function ConverterUI() {
   const [file, setFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (isLoading) return;
+    if (status === 'processing' || status === 'uploading') return;
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const f = e.dataTransfer.files[0];
       if (f.name.toLowerCase().endsWith('.epub')) {
         setFile(f);
-        setError(null);
-        setSuccess(false);
+        setStatus('idle');
       } else {
-        setError('Only .epub files are supported.');
+        setErrorMessage('Only .epub files are allowed');
+        setStatus('error');
       }
     }
-  }, [isLoading]);
+  }, [status]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
-      setError(null);
-      setSuccess(false);
+      setStatus('idle');
+      setErrorMessage('');
     }
   };
 
   const handleConvert = async () => {
     if (!file) return;
 
-    setIsLoading(true);
-    setError(null);
-    setSuccess(false);
-
+    setStatus('uploading'); // UI feedback: Uploading
+    
     try {
       const formData = new FormData();
       formData.append('file', file);
 
+      setStatus('processing'); // UI feedback: Server working
+      
       const response = await fetch('/api/convert', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Server Error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Conversion failed on server');
       }
 
-      // Handle file download
+      // Handle File Download
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      
-      // Try to get filename from header
-      const contentDisp = response.headers.get('Content-Disposition');
-      let filename = file.name.replace('.epub', '.pdf');
-      if (contentDisp && contentDisp.includes('filename=')) {
-        const match = contentDisp.match(/filename="?([^"]+)"?/);
-        if (match && match[1]) filename = match[1];
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      // Get filename from header or fallback
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let fileName = file.name.replace('.epub', '.pdf');
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) {
+            fileName = match[1];
+        }
       }
-
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      setSuccess(true);
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      setStatus('success');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'An error occurred during conversion.');
-    } finally {
-      setIsLoading(false);
+      setErrorMessage(err.message || 'An unexpected error occurred');
+      setStatus('error');
     }
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-white rounded-xl shadow-lg border border-slate-200 p-8">
+    <div className="max-w-xl mx-auto mt-10 p-6 bg-white rounded-xl shadow-md border border-slate-200">
       
-      {/* Drop Zone */}
-      <div 
-        onDrop={onDrop}
-        onDragOver={(e) => e.preventDefault()}
-        className={`
-          relative border-2 border-dashed rounded-lg p-10 text-center transition-all
-          ${isLoading ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-300' : 'cursor-pointer hover:bg-slate-50'}
-          ${error ? 'border-red-300 bg-red-50' : file ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300'}
-        `}
-      >
-        <input 
-          type="file" 
-          accept=".epub" 
-          onChange={onFileChange} 
-          className="hidden" 
-          id="epub-upload" 
-          disabled={isLoading}
-        />
-        <label htmlFor="epub-upload" className="block w-full h-full cursor-pointer">
-          {file ? (
-            <div className="animate-in fade-in zoom-in duration-300">
-               <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                 <i className="fas fa-file-invoice"></i>
-               </div>
-               <p className="font-semibold text-slate-800 truncate px-4">{file.name}</p>
-               <p className="text-xs text-slate-500 mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+      {/* 1. UPLOAD ZONE */}
+      {!file && (
+        <div 
+          onDrop={onDrop}
+          onDragOver={(e) => e.preventDefault()}
+          className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <input type="file" accept=".epub" onChange={onFileChange} className="hidden" id="file-upload" />
+          <label htmlFor="file-upload" className="cursor-pointer">
+            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
             </div>
+            <p className="text-lg font-medium text-slate-700">Click or Drag EPUB here</p>
+            <p className="text-sm text-slate-400 mt-2">Server-side High Fidelity Conversion</p>
+          </label>
+        </div>
+      )}
+
+      {/* 2. FILE SELECTED & ACTIONS */}
+      {file && status !== 'success' && (
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-3 mb-6 p-4 bg-indigo-50 rounded-lg text-indigo-900">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span className="font-semibold">{file.name}</span>
+            <button onClick={() => {setFile(null); setStatus('idle');}} className="ml-2 text-indigo-400 hover:text-indigo-700">×</button>
+          </div>
+
+          {status === 'processing' || status === 'uploading' ? (
+             <button disabled className="w-full py-3 bg-indigo-400 text-white rounded-lg font-bold flex items-center justify-center gap-2 cursor-wait">
+               <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+               </svg>
+               {status === 'uploading' ? 'Uploading...' : 'Rendering PDF...'}
+             </button>
           ) : (
-            <div className="text-slate-500">
-              <i className="fas fa-cloud-upload-alt text-3xl mb-3 text-slate-400"></i>
-              <p className="font-medium text-slate-700">Click or Drag & Drop EPUB</p>
-              <p className="text-xs mt-1 text-slate-400">Strict Server-Side Processing</p>
+            <button onClick={handleConvert} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-md transition-all">
+              Convert to PDF
+            </button>
+          )}
+          
+          {status === 'error' && (
+            <div className="mt-4 text-red-600 bg-red-50 p-3 rounded border border-red-200 text-sm">
+              Error: {errorMessage}
             </div>
           )}
-        </label>
-      </div>
-
-      {/* Error Feedback */}
-      {error && (
-        <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-100 flex items-center">
-          <i className="fas fa-exclamation-triangle mr-2"></i>
-          {error}
         </div>
       )}
 
-      {/* Success Feedback */}
-      {success && (
-        <div className="mt-4 p-3 bg-green-50 text-green-600 text-sm rounded-md border border-green-100 flex items-center">
-          <i className="fas fa-check-circle mr-2"></i>
-          Conversion successful! Download started.
+      {/* 3. SUCCESS STATE */}
+      {status === 'success' && (
+        <div className="text-center py-6">
+          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Conversion Complete!</h3>
+          <p className="text-slate-500 mb-6">Your PDF has been downloaded automatically.</p>
+          <button 
+            onClick={() => {setFile(null); setStatus('idle');}}
+            className="text-indigo-600 font-medium hover:underline"
+          >
+            Convert another file
+          </button>
         </div>
       )}
-
-      {/* Convert Button / Spinner */}
-      <button
-        onClick={handleConvert}
-        disabled={!file || isLoading}
-        className={`
-          w-full mt-6 py-3 rounded-lg font-bold text-white shadow-md transition-all flex items-center justify-center gap-2
-          ${!file || isLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg'}
-        `}
-      >
-        {isLoading ? (
-          <>
-            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Processing on Server...</span>
-          </>
-        ) : (
-          <>
-            <span>Convert to PDF</span>
-            <i className="fas fa-arrow-right text-sm opacity-80"></i>
-          </>
-        )}
-      </button>
-
-      {/* Footer Info */}
-      <p className="text-center text-xs text-slate-400 mt-4">
-        Powered by Puppeteer. High-fidelity rendering.
-      </p>
     </div>
   );
 }
